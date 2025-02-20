@@ -12,6 +12,27 @@ type NestedTagParser struct {
 	items   []string
 }
 
+func findEscapedBackslashesIndexes(s string) (escapedBackslashes []int, ignoredBackslashes []int) {
+	const escapedBackslash = `\\`
+	var escapedIndexes []int
+	var ignoredIndexes []int
+	index := strings.Index(s, escapedBackslash)
+
+	for index != -1 {
+		escapedIndexes = append(escapedIndexes, index)
+		ignoredIndexes = append(ignoredIndexes, index+1)
+		if index+len(escapedBackslash) < len(s) {
+			index = strings.Index(s[index+len(escapedBackslash):], escapedBackslash)
+			if index != -1 {
+				index += escapedIndexes[len(escapedIndexes)-1] + len(escapedBackslash)
+			}
+		} else {
+			break
+		}
+	}
+	return escapedIndexes, ignoredIndexes
+}
+
 func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) error {
 	const EscapeBackSlash = `\`
 	backticks := []string{`'`}
@@ -21,10 +42,20 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) er
 	var backticksStack []byte
 	isBackticksContent := false
 
-	// TODO: process escaped backslashes
+	escapedBackslashes, ignoredBackslashes := findEscapedBackslashesIndexes(content)
 
 	for pos, char := range content {
-		priorBackslash := pos != 0 && string(content[pos-1]) == EscapeBackSlash
+		// Process escaped backslashes
+		if slices.Contains(escapedBackslashes, pos) {
+			currentItem += string(char)
+			continue
+		}
+		if slices.Contains(ignoredBackslashes, pos) {
+			continue
+		}
+
+		isPriorBackslashEscaped := pos != 0 && slices.Contains(ignoredBackslashes, pos-1)
+		priorBackslash := pos != 0 && string(content[pos-1]) == EscapeBackSlash && !isPriorBackslashEscaped
 		if slices.Contains(backticks, string(char)) && !priorBackslash {
 			isBacktickStackNotEmpty := len(backticksStack) != 0
 			if isBacktickStackNotEmpty && backticksStack[len(backticksStack)-1] == byte(char) {
