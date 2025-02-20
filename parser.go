@@ -2,29 +2,66 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 )
 
 type NestedTagParser struct {
+	name    string
 	options []string
 	params  map[string]string
 	items   []string
 }
 
+func (parser *NestedTagParser) distributeItemsToOptionsAndParams(trimSpaces bool) error {
+	const Separator = ":"
+	for _, item := range parser.items {
+		if strings.Contains(item, Separator) {
+			var key, value string
+			pair := strings.SplitN(item, Separator, 2)
+
+			if trimSpaces {
+				key = strings.TrimSpace(pair[0])
+				value = strings.TrimSpace(pair[1])
+			} else {
+				key = pair[0]
+				value = pair[1]
+			}
+
+			if len(key) == 0 {
+				return errors.New(fmt.Sprintf("invalid param with empty name and value \"%s\"", value))
+			}
+
+			if _, keyExist := parser.params[key]; keyExist {
+				return errors.New(fmt.Sprintf("duplicated param \"%s\" in tag", key))
+			}
+
+			parser.params[key] = value
+		} else {
+			if trimSpaces {
+				parser.options = append(parser.options, strings.TrimSpace(item))
+			} else {
+				parser.options = append(parser.options, item)
+			}
+		}
+	}
+	return nil
+}
+
 func findEscapedBackslashesIndexes(s string) (escapedBackslashes []int, ignoredBackslashes []int) {
-	const escapedBackslash = `\\`
+	const EscapedBackslash = `\\`
 	var escapedIndexes []int
 	var ignoredIndexes []int
-	index := strings.Index(s, escapedBackslash)
+	index := strings.Index(s, EscapedBackslash)
 
 	for index != -1 {
 		escapedIndexes = append(escapedIndexes, index)
 		ignoredIndexes = append(ignoredIndexes, index+1)
-		if index+len(escapedBackslash) < len(s) {
-			index = strings.Index(s[index+len(escapedBackslash):], escapedBackslash)
+		if index+len(EscapedBackslash) < len(s) {
+			index = strings.Index(s[index+len(EscapedBackslash):], EscapedBackslash)
 			if index != -1 {
-				index += escapedIndexes[len(escapedIndexes)-1] + len(escapedBackslash)
+				index += escapedIndexes[len(escapedIndexes)-1] + len(EscapedBackslash)
 			}
 		} else {
 			break
@@ -104,8 +141,13 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) er
 }
 
 func Parse(tagContent string) (NestedTagParser, error) {
-	parser := NestedTagParser{}
+	parser := NestedTagParser{
+		params: map[string]string{},
+	}
 	if err := parser.splitTagItems(tagContent, true); err != nil {
+		return parser, err
+	}
+	if err := parser.distributeItemsToOptionsAndParams(true); err != nil {
 		return parser, err
 	}
 	return parser, nil
