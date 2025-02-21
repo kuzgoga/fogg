@@ -70,10 +70,20 @@ func findEscapedBackslashesIndexes(s string) (escapedBackslashes []int, ignoredB
 	return escapedIndexes, ignoredIndexes
 }
 
-func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) error {
-	const EscapeBackSlash = `\`
+func (parser *NestedTagParser) splitSubtagItems(content string, trimSpaces bool) error {
 	backticks := []string{`'`}
 	delimiters := []string{`;`}
+	return parser.splitTagItems(content, trimSpaces, backticks, delimiters, false)
+}
+
+func (parser *NestedTagParser) splitPrimaryTagsItems(content string, trimSpaces bool) error {
+	backticks := []string{`"`}
+	delimiters := []string{` `}
+	return parser.splitTagItems(content, trimSpaces, backticks, delimiters, false)
+}
+
+func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool, backticks []string, delimiters []string, deleteEscapedSymbols bool) error {
+	const EscapeBackslash = `\`
 
 	currentItem := ""
 	var backticksStack []byte
@@ -87,12 +97,22 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) er
 			currentItem += string(char)
 			continue
 		}
-		if slices.Contains(ignoredBackslashes, pos) {
+		if slices.Contains(ignoredBackslashes, pos) && deleteEscapedSymbols {
+			continue
+		} else if slices.Contains(ignoredBackslashes, pos) && !deleteEscapedSymbols {
+			currentItem += string(char)
 			continue
 		}
 
 		isPriorBackslashEscaped := pos != 0 && slices.Contains(ignoredBackslashes, pos-1)
-		priorBackslash := pos != 0 && string(content[pos-1]) == EscapeBackSlash && !isPriorBackslashEscaped
+		priorBackslash := pos != 0 && string(content[pos-1]) == EscapeBackslash && !isPriorBackslashEscaped
+
+		// Skip backslashes used for escaping symbols
+		if priorBackslash && slices.Contains(backticks, string(char)) && deleteEscapedSymbols {
+			currentItem = currentItem[:len(currentItem)-1] + string(char)
+			continue
+		}
+
 		if slices.Contains(backticks, string(char)) && !priorBackslash {
 			isBacktickStackNotEmpty := len(backticksStack) != 0
 			if isBacktickStackNotEmpty && backticksStack[len(backticksStack)-1] == byte(char) {
@@ -102,6 +122,7 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool) er
 			}
 			backticksStack = append(backticksStack, byte(char))
 		}
+
 		if slices.Contains(delimiters, string(char)) && !isBackticksContent && !priorBackslash {
 			if currentItem != "" {
 				if trimSpaces {
@@ -144,7 +165,7 @@ func Parse(tagContent string) (NestedTagParser, error) {
 	parser := NestedTagParser{
 		params: map[string]string{},
 	}
-	if err := parser.splitTagItems(tagContent, true); err != nil {
+	if err := parser.splitSubtagItems(tagContent, true); err != nil {
 		return parser, err
 	}
 	if err := parser.distributeItemsToOptionsAndParams(true); err != nil {

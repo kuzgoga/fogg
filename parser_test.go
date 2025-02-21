@@ -12,7 +12,7 @@ func TestSplitTagNormalItems(t *testing.T) {
 	content := `not null;default:"one,two";check:,name <> 'jinzhu'`
 	expected := []string{"not null", "default:\"one,two\"", "check:,name <> 'jinzhu'"}
 
-	err := parser.splitTagItems(content, true)
+	err := parser.splitSubtagItems(content, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -28,7 +28,7 @@ func TestSplitTagWithEscape(t *testing.T) {
 	content := `foreignKey:hy\;pe;index:,unique;`
 	expected := []string{"foreignKey:hy;pe", "index:,unique"}
 
-	err := parser.splitTagItems(content, true)
+	err := parser.splitSubtagItems(content, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -44,7 +44,7 @@ func TestSplitTagWithDoubledDelimiter(t *testing.T) {
 	content := `not null;;;references:Id;`
 	expected := []string{"not null", "references:Id"}
 
-	err := parser.splitTagItems(content, true)
+	err := parser.splitSubtagItems(content, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -59,7 +59,7 @@ func TestSplitTagWithUnclosedBacktick(t *testing.T) {
 
 	content := `not null;references:'Id;`
 
-	err := parser.splitTagItems(content, true)
+	err := parser.splitSubtagItems(content, true)
 	if err == nil {
 		t.Errorf("expected error: unclosed backtick in tag")
 	}
@@ -93,7 +93,7 @@ func TestParseFunctionWithError(t *testing.T) {
 
 func TestEscapedBackslashes(t *testing.T) {
 	tagContent := `references:badId\\;polymorphic:my\'BadValue;`
-	expectedItems := []string{`references:badId\`, `polymorphic:my\'BadValue`}
+	expectedItems := []string{`references:badId\\`, `polymorphic:my\'BadValue`}
 
 	parser, err := Parse(tagContent)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestSplitTagTrimSpaces(t *testing.T) {
 	content := `  not null  ;  default:'one,two'  ;  check:,name <> 'jinzhu'  `
 	expected := []string{"  not null  ", "  default:'one,two'  ", "  check:,name <> 'jinzhu'  "}
 
-	err := parser.splitTagItems(content, false)
+	err := parser.splitSubtagItems(content, false)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -251,3 +251,5 @@ func TestDistributeItemsToOptionsAndParamsWithoutTrimSpaces(t *testing.T) {
 		}
 	}
 }
+
+// TODO: process all branches of deleteEscapeSymbols
