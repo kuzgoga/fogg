@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-type NestedTagParser struct {
-	name    string
-	options []string
-	params  map[string]string
-	items   []string
-}
-
-func (parser *NestedTagParser) distributeItemsToOptionsAndParams(trimSpaces bool) error {
+func parseTagItems(name string, items []string, argsDelimiter string, trimSpaces bool) (Tag, error) {
 	const Separator = ":"
-	for _, item := range parser.items {
+
+	tag := Tag{
+		name:    name,
+		params:  make(map[string]TagParam),
+		options: make([]string, 0),
+	}
+
+	for _, item := range items {
 		if strings.Contains(item, Separator) {
 			var key, value string
 			pair := strings.SplitN(item, Separator, 2)
@@ -30,23 +30,29 @@ func (parser *NestedTagParser) distributeItemsToOptionsAndParams(trimSpaces bool
 			}
 
 			if len(key) == 0 {
-				return errors.New(fmt.Sprintf("invalid param with empty name and value \"%s\"", value))
+				return tag, errors.New(fmt.Sprintf(emptyNameTagErr, value))
 			}
 
-			if _, keyExist := parser.params[key]; keyExist {
-				return errors.New(fmt.Sprintf("duplicated param \"%s\" in tag", key))
+			if _, keyExist := tag.params[key]; keyExist {
+				return tag, errors.New(fmt.Sprintf(duplicatedParamErr, key))
 			}
 
-			parser.params[key] = value
+			param := TagParam{
+				Name:  key,
+				Value: value,
+				Args:  strings.Split(value, argsDelimiter),
+			}
+
+			tag.params[key] = param
 		} else {
 			if trimSpaces {
-				parser.options = append(parser.options, strings.TrimSpace(item))
+				tag.options = append(tag.options, strings.TrimSpace(item))
 			} else {
-				parser.options = append(parser.options, item)
+				tag.options = append(tag.options, item)
 			}
 		}
 	}
-	return nil
+	return tag, nil
 }
 
 func findEscapedBackslashesIndexes(s string) (escapedBackslashes []int, ignoredBackslashes []int) {
@@ -70,24 +76,15 @@ func findEscapedBackslashesIndexes(s string) (escapedBackslashes []int, ignoredB
 	return escapedIndexes, ignoredIndexes
 }
 
-func (parser *NestedTagParser) splitSubtagItems(content string, trimSpaces bool) error {
-	backticks := []string{`'`}
-	delimiters := []string{`;`}
-	return parser.splitTagItems(content, trimSpaces, backticks, delimiters, false)
-}
+func splitTagItems(content string, trimSpaces bool, backticks []string, delimiters []string, deleteEscapedSymbols bool) ([]string, error) {
+	const EscapeBackslash string = `\`
 
-func (parser *NestedTagParser) splitPrimaryTagsItems(content string, trimSpaces bool) error {
-	backticks := []string{`"`}
-	delimiters := []string{` `}
-	return parser.splitTagItems(content, trimSpaces, backticks, delimiters, false)
-}
-
-func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool, backticks []string, delimiters []string, deleteEscapedSymbols bool) error {
-	const EscapeBackslash = `\`
-
-	currentItem := ""
-	var backticksStack []byte
-	isBackticksContent := false
+	var (
+		items              []string
+		backticksStack     []byte
+		currentItem        string
+		isBackticksContent bool
+	)
 
 	escapedBackslashes, ignoredBackslashes := findEscapedBackslashesIndexes(content)
 
@@ -126,9 +123,9 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool, ba
 		if slices.Contains(delimiters, string(char)) && !isBackticksContent && !priorBackslash {
 			if currentItem != "" {
 				if trimSpaces {
-					parser.items = append(parser.items, strings.TrimSpace(currentItem))
+					items = append(items, strings.TrimSpace(currentItem))
 				} else {
-					parser.items = append(parser.items, currentItem)
+					items = append(items, currentItem)
 				}
 			}
 			currentItem = ""
@@ -139,37 +136,54 @@ func (parser *NestedTagParser) splitTagItems(content string, trimSpaces bool, ba
 
 	if currentItem != "" {
 		if trimSpaces {
-			parser.items = append(parser.items, strings.TrimSpace(currentItem))
+			items = append(items, strings.TrimSpace(currentItem))
 		} else {
-			parser.items = append(parser.items, currentItem)
+			items = append(items, currentItem)
 		}
 	}
 
-	for i, item := range parser.items {
+	for i, item := range items {
 		for _, quote := range backticks {
-			parser.items[i] = strings.ReplaceAll(item, "\\"+quote, quote)
+			items[i] = strings.ReplaceAll(item, "\\"+quote, quote)
 		}
 		for _, delimiter := range delimiters {
-			parser.items[i] = strings.ReplaceAll(item, "\\"+delimiter, delimiter)
+			items[i] = strings.ReplaceAll(item, "\\"+delimiter, delimiter)
 		}
 	}
 
 	if len(backticksStack)%2 != 0 {
-		return errors.New("unclosed backtick in tag")
+		return items, errors.New(unclosedBacktickErr)
 	}
 
-	return nil
+	return items, nil
 }
 
-func Parse(tagContent string) (NestedTagParser, error) {
-	parser := NestedTagParser{
-		params: map[string]string{},
+func unquoteTagContent(name, content string) (string, error) {
+	const backtick rune = '"'
+	if len(content) < 2 {
+		return "", errors.New(fmt.Sprintf(valueLessTagErr, name))
 	}
-	if err := parser.splitSubtagItems(tagContent, true); err != nil {
-		return parser, err
+	var startChar, endChar = content[0], content[len(content)-1]
+	if rune(startChar) == backtick && rune(endChar) == backtick {
+		return content[1 : len(content)-1], nil
+	} else {
+		return "", errors.New(fmt.Sprintf(nonQuotedValueErr, name))
 	}
-	if err := parser.distributeItemsToOptionsAndParams(true); err != nil {
-		return parser, err
+}
+
+func ParseSubtag(value string, trimSpaces bool) (Tag, error) {
+	const argsDelimiter = ","
+	subtagBackticks := []string{`'`, `"`}
+	subtagDelimiters := []string{";"}
+
+	tagItems, err := splitTagItems(value, trimSpaces, subtagBackticks, subtagDelimiters, true)
+	if err != nil {
+		return Tag{}, err
 	}
-	return parser, nil
+
+	tag, err := parseTagItems("", tagItems, argsDelimiter, true)
+	if err != nil {
+		return Tag{}, err
+	}
+	return tag, nil
 }

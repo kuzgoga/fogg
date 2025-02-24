@@ -1,40 +1,51 @@
 package main
 
+import (
+	"slices"
+)
+
+// TODO: introduce constants here
+// TODO: enumerate errors here
+// TODO: config feature
+
 type Tag struct {
 	name    string
 	params  map[string]TagParam
 	options []string
 }
 
-type TagParam struct {
-	Name  string
-	Value string
-	Args  []string
+func (tag *Tag) Name() string {
+	return tag.name
 }
 
-func ParseFromString(content string) (Tag, error) {
-	panic("not implemented")
-	return Tag{}, nil
-}
-
-func ParseSubtag(content string) (Tag, error) {
-	tag := Tag{
-		name:    "",
-		params:  make(map[string]TagParam),
-		options: nil,
+func (tag *Tag) HasOption(name string) bool {
+	if slices.Contains(tag.options, name) {
+		return true
+	} else {
+		return false
 	}
-	panic("not implemented")
-	return tag, nil
 }
 
-func (tag *Tag) HasOption(name string) {
-	panic("not implemented")
+func (tag *Tag) HasParam(name string) bool {
+	if _, exist := tag.params[name]; exist {
+		return true
+	} else {
+		return false
+	}
 }
 
 func (tag *Tag) GetParam(name string) *TagParam {
-	panic("not implemented")
+	if param, exist := tag.params[name]; exist {
+		return &param
+	} else {
+		return nil
+	}
 }
 
-func (tag *Tag) Name() string {
-	return tag.name
+func (tag *Tag) GetParamOr(name string, defaultValue string) string {
+	if param, exist := tag.params[name]; exist {
+		return param.Value
+	} else {
+		return defaultValue
+	}
 }

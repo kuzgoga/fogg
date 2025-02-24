@@ -5,89 +5,36 @@ import (
 	"testing"
 )
 
-func TestSplitTagNormalItems(t *testing.T) {
-	parser := NestedTagParser{}
-
-	// Normal tag with options and params
-	content := `not null;default:"one,two";check:,name <> 'jinzhu'`
-	expected := []string{"not null", "default:\"one,two\"", "check:,name <> 'jinzhu'"}
-
-	err := parser.splitSubtagItems(content, true)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	if !slices.Equal(parser.items, expected) {
-		t.Errorf("expected %v, got %v", expected, parser.items)
-	}
-}
-
-func TestSplitTagWithEscape(t *testing.T) {
-	parser := NestedTagParser{}
-
-	content := `foreignKey:hy\;pe;index:,unique;`
-	expected := []string{"foreignKey:hy;pe", "index:,unique"}
-
-	err := parser.splitSubtagItems(content, true)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	if !slices.Equal(parser.items, expected) {
-		t.Errorf("expected %#v, got %#v", expected, parser.items)
-	}
-}
-
-func TestSplitTagWithDoubledDelimiter(t *testing.T) {
-	parser := NestedTagParser{}
-
-	content := `not null;;;references:Id;`
-	expected := []string{"not null", "references:Id"}
-
-	err := parser.splitSubtagItems(content, true)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	if !slices.Equal(parser.items, expected) {
-		t.Errorf("expected %#v, got %#v", expected, parser.items)
-	}
-}
-
-func TestSplitTagWithUnclosedBacktick(t *testing.T) {
-	parser := NestedTagParser{}
-
-	content := `not null;references:'Id;`
-
-	err := parser.splitSubtagItems(content, true)
-	if err == nil {
-		t.Errorf("expected error: unclosed backtick in tag")
-	}
-}
+const argsDelimiter = `,`
 
 func TestParseFunction(t *testing.T) {
 	tagContent := `not null;default:'one';check:', n > 1'`
 	expectedItems := []string{"not null", "default:'one'", "check:', n > 1'"}
+	backticks := []string{`'`}
+	delimiters := []string{`;`}
 
-	parser, err := Parse(tagContent)
+	items, err := splitTagItems(tagContent, true, backticks, delimiters, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
 
-	if !slices.Equal(parser.items, expectedItems) {
-		t.Errorf("expected %v, got %v", expectedItems, parser.items)
+	if !slices.Equal(items, expectedItems) {
+		t.Errorf("expected %v, got %v", expectedItems, items)
 	}
 }
 
 func TestParseFunctionWithError(t *testing.T) {
-	const TagContent = `not null;default:'one;check:', n > 1'`
-	const ExpectedError = "unclosed backtick in tag"
+	const tagContent = `not null;default:'one;check:', n > 1'`
+	const expectedError = "unclosed backtick in tag"
 
-	_, err := Parse(TagContent)
-	if err != nil && err.Error() != ExpectedError {
+	backticks := []string{`'`}
+	delimiters := []string{`;`}
+
+	_, err := splitTagItems(tagContent, true, backticks, delimiters, true)
+	if err != nil && err.Error() != expectedError {
 		t.Errorf("unexpected error: %s", err)
 	} else if err == nil {
-		t.Errorf("expected error: %s", ExpectedError)
+		t.Errorf("expected error: %s", expectedError)
 	}
 }
 
@@ -95,32 +42,36 @@ func TestEscapedBackslashes(t *testing.T) {
 	tagContent := `references:badId\\;polymorphic:my\'BadValue;`
 	expectedItems := []string{`references:badId\\`, `polymorphic:my\'BadValue`}
 
-	parser, err := Parse(tagContent)
+	backticks := []string{`"`}
+	delimiters := []string{`;`}
+	items, err := splitTagItems(tagContent, true, backticks, delimiters, false)
+
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
 
-	if !slices.Equal(parser.items, expectedItems) {
-		t.Errorf("expected %v, got %v", expectedItems, parser.items)
+	if !slices.Equal(items, expectedItems) {
+		t.Errorf("expected %v, got %v", expectedItems, items)
 	}
 }
 
 func TestSplitTagTrimSpaces(t *testing.T) {
-	parser := NestedTagParser{}
-
 	content := `  not null  ;  default:'one,two'  ;  check:,name <> 'jinzhu'  `
 	expected := []string{"  not null  ", "  default:'one,two'  ", "  check:,name <> 'jinzhu'  "}
+	backticks := []string{`"`}
+	delimiters := []string{`;`}
 
-	err := parser.splitSubtagItems(content, false)
+	items, err := splitTagItems(content, false, backticks, delimiters, false)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
 
-	if !slices.Equal(parser.items, expected) {
-		t.Errorf("expected %v, got %v", expected, parser.items)
+	if !slices.Equal(items, expected) {
+		t.Errorf("expected %v, got %v", expected, items)
 	}
 }
 
+/* --- FindEscapedBackslashes function tests --- */
 func TestFindEscapedBackslashesIndexes(t *testing.T) {
 	input := `This is a test string with escaped backslashes \\ and more \\ backslashes`
 	expectedEscaped := []int{47, 59}
@@ -153,13 +104,11 @@ func TestFindEscapedBackslashesIndexesWithBreak(t *testing.T) {
 	}
 }
 
+/* --- Distribution function tests --- */
 func TestDistributeItemsToOptionsAndParams(t *testing.T) {
-	parser := NestedTagParser{
-		items:  []string{"option1", "param1:value1", "option2", "param2:value2"},
-		params: make(map[string]string),
-	}
+	items := []string{"option1", "param1:value1", "option2", "param2:value2"}
 
-	err := parser.distributeItemsToOptionsAndParams(true)
+	tag, err := parseTagItems("", items, argsDelimiter, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -167,24 +116,21 @@ func TestDistributeItemsToOptionsAndParams(t *testing.T) {
 	expectedOptions := []string{"option1", "option2"}
 	expectedParams := map[string]string{"param1": "value1", "param2": "value2"}
 
-	if !slices.Equal(parser.options, expectedOptions) {
-		t.Errorf("expected options %v, got %v", expectedOptions, parser.options)
+	if !slices.Equal(tag.options, expectedOptions) {
+		t.Errorf("expected options %v, got %v", expectedOptions, tag.options)
 	}
 
 	for key, value := range expectedParams {
-		if parser.params[key] != value {
-			t.Errorf("expected param %s to be %s, got %s", key, value, parser.params[key])
+		if tag.params[key].Value != value {
+			t.Errorf("expected param %s to be %s, got %s", key, value, tag.params[key].Value)
 		}
 	}
 }
 
 func TestDistributeItemsToOptionsAndParamsWithSpaces(t *testing.T) {
-	parser := NestedTagParser{
-		items:  []string{" option1 ", " param1 : value1 ", " option2 ", " param2 : value2 "},
-		params: make(map[string]string),
-	}
+	items := []string{" option1 ", " param1 : value1 ", " option2 ", " param2 : value2 "}
 
-	err := parser.distributeItemsToOptionsAndParams(true)
+	tag, err := parseTagItems("", items, argsDelimiter, true)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -192,48 +138,39 @@ func TestDistributeItemsToOptionsAndParamsWithSpaces(t *testing.T) {
 	expectedOptions := []string{"option1", "option2"}
 	expectedParams := map[string]string{"param1": "value1", "param2": "value2"}
 
-	if !slices.Equal(parser.options, expectedOptions) {
-		t.Errorf("expected options %v, got %v", expectedOptions, parser.options)
+	if !slices.Equal(tag.options, expectedOptions) {
+		t.Errorf("expected options %v, got %v", expectedOptions, tag.options)
 	}
 
 	for key, value := range expectedParams {
-		if parser.params[key] != value {
-			t.Errorf("expected param %s to be %s, got %s", key, value, parser.params[key])
+		if tag.params[key].Value != value {
+			t.Errorf("expected param %s to be %s, got %s", key, value, tag.params[key].Value)
 		}
 	}
 }
 
 func TestDistributeItemsToOptionsAndParamsWithDuplicateParam(t *testing.T) {
-	parser := NestedTagParser{
-		items:  []string{"param1:value1", "param1:value2"},
-		params: make(map[string]string),
-	}
+	items := []string{"param1:value1", "param1:value2"}
 
-	err := parser.distributeItemsToOptionsAndParams(true)
+	_, err := parseTagItems("", items, argsDelimiter, true)
 	if err == nil {
 		t.Errorf("expected error for duplicate param, got nil")
 	}
 }
 
 func TestDistributeItemsToOptionsAndParamsWithEmptyKey(t *testing.T) {
-	parser := NestedTagParser{
-		items:  []string{"param1:value1", ":value2"},
-		params: make(map[string]string),
-	}
+	items := []string{"param1:value1", ":value2"}
 
-	err := parser.distributeItemsToOptionsAndParams(true)
+	_, err := parseTagItems("", items, argsDelimiter, true)
 	if err == nil {
 		t.Errorf("expected error for empty key, got nil")
 	}
 }
 
 func TestDistributeItemsToOptionsAndParamsWithoutTrimSpaces(t *testing.T) {
-	parser := NestedTagParser{
-		items:  []string{" option1 ", " param1 : value1 ", " option2 ", " param2 : value2 "},
-		params: make(map[string]string),
-	}
+	items := []string{" option1 ", " param1 : value1 ", " option2 ", " param2 : value2 "}
 
-	err := parser.distributeItemsToOptionsAndParams(false)
+	tag, err := parseTagItems("", items, argsDelimiter, false)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
@@ -241,13 +178,13 @@ func TestDistributeItemsToOptionsAndParamsWithoutTrimSpaces(t *testing.T) {
 	expectedOptions := []string{" option1 ", " option2 "}
 	expectedParams := map[string]string{" param1 ": " value1 ", " param2 ": " value2 "}
 
-	if !slices.Equal(parser.options, expectedOptions) {
-		t.Errorf("expected options %v, got %v", expectedOptions, parser.options)
+	if !slices.Equal(tag.options, expectedOptions) {
+		t.Errorf("expected options %v, got %v", expectedOptions, tag.options)
 	}
 
 	for key, value := range expectedParams {
-		if parser.params[key] != value {
-			t.Errorf("expected param %s to be %s, got %s", key, value, parser.params[key])
+		if tag.params[key].Value != value {
+			t.Errorf("expected param %s to be %s, got %s", key, value, tag.params[key].Value)
 		}
 	}
 }
