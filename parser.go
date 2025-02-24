@@ -143,8 +143,8 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 	}
 
 	for i, item := range items {
-		for _, quote := range backticks {
-			items[i] = strings.ReplaceAll(item, "\\"+quote, quote)
+		for _, backtick := range backticks {
+			items[i] = strings.ReplaceAll(item, "\\"+backtick, backtick)
 		}
 		for _, delimiter := range delimiters {
 			items[i] = strings.ReplaceAll(item, "\\"+delimiter, delimiter)

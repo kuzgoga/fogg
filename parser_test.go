@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -42,9 +43,26 @@ func TestEscapedBackslashes(t *testing.T) {
 	tagContent := `references:badId\\;polymorphic:my\'BadValue;`
 	expectedItems := []string{`references:badId\\`, `polymorphic:my\'BadValue`}
 
-	backticks := []string{`"`}
+	backticks := []string{`'`}
 	delimiters := []string{`;`}
 	items, err := splitTagItems(tagContent, true, backticks, delimiters, false)
+
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+
+	if !slices.Equal(items, expectedItems) {
+		t.Errorf("expected %v, got %v", expectedItems, items)
+	}
+}
+
+func TestDeleteEscapedBackslashes(t *testing.T) {
+	tagContent := `references:badId\\;polymorphic:my\'BadValue;`
+	expectedItems := []string{`references:badId\`, `polymorphic:my'BadValue`}
+
+	backticks := []string{`'`}
+	delimiters := []string{`;`}
+	items, err := splitTagItems(tagContent, true, backticks, delimiters, true)
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -58,7 +76,7 @@ func TestEscapedBackslashes(t *testing.T) {
 func TestSplitTagTrimSpaces(t *testing.T) {
 	content := `  not null  ;  default:'one,two'  ;  check:,name <> 'jinzhu'  `
 	expected := []string{"  not null  ", "  default:'one,two'  ", "  check:,name <> 'jinzhu'  "}
-	backticks := []string{`"`}
+	backticks := []string{`'`}
 	delimiters := []string{`;`}
 
 	items, err := splitTagItems(content, false, backticks, delimiters, false)
@@ -189,4 +207,28 @@ func TestDistributeItemsToOptionsAndParamsWithoutTrimSpaces(t *testing.T) {
 	}
 }
 
-// TODO: process all branches of deleteEscapeSymbols
+func TestUnquoteTag(t *testing.T) {
+	quoted := `"content"`
+	expectedUnquoted := `content`
+	invalidQuoted := `"`
+	expectedInvalidQuotedError := fmt.Sprintf(valueLessTagErr, "")
+	nonQuoted := `value`
+	nonQuotedValueError := fmt.Sprintf(nonQuotedValueErr, "")
+
+	if unquoted, err := unquoteTagContent("", quoted); err != nil || unquoted != expectedUnquoted {
+		if err != nil {
+			t.Errorf("unexpected error: %s", err.Error())
+		}
+		if unquoted != expectedUnquoted {
+			t.Errorf("wrong unquoted: got `%s`, expected `%s`", unquoted, expectedUnquoted)
+		}
+	}
+
+	if _, err := unquoteTagContent("", invalidQuoted); err == nil || err.Error() != expectedInvalidQuotedError {
+		t.Errorf("unexpected error: got `%s`, expected `%s`", err, expectedInvalidQuotedError)
+	}
+
+	if _, err := unquoteTagContent("", nonQuoted); err == nil || err.Error() != nonQuotedValueError {
+		t.Errorf("unexpected error: got `%s`, expected `%s`", err, nonQuotedValueError)
+	}
+}
