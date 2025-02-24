@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"slices"
 	"testing"
 )
@@ -230,5 +232,47 @@ func TestUnquoteTag(t *testing.T) {
 
 	if _, err := unquoteTagContent("", nonQuoted); err == nil || err.Error() != nonQuotedValueError {
 		t.Errorf("unexpected error: got `%s`, expected `%s`", err, nonQuotedValueError)
+	}
+}
+
+func TestParseSubtag(t *testing.T) {
+	const validTag string = `default:'\"SomeValue';foreignKey:CustomerId;`
+
+	expectedTag := Tag{
+		name: "",
+		params: map[string]TagParam{
+			"default": {
+				Name:  "default",
+				Value: `'"SomeValue'`,
+				Args:  []string{`'"SomeValue'`},
+			},
+			"foreignKey": {
+				Name:  "foreignKey",
+				Value: "CustomerId",
+				Args:  []string{"CustomerId"},
+			},
+		},
+		options: []string{},
+	}
+
+	tag, err := ParseSubtag(validTag, true)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	if !cmp.Equal(expectedTag, tag, cmpopts.IgnoreUnexported(Tag{})) {
+		t.Errorf("mismatch (-expected +got):\n%s", cmp.Diff(expectedTag, tag, cmpopts.IgnoreUnexported(Tag{})))
+	}
+}
+
+func TestParseSubtagsErrors(t *testing.T) {
+	const unclosedBacktickTag = `default:'"SomeValue';foreignKey:CustomerId;`
+	if _, err := ParseSubtag(unclosedBacktickTag, true); err == nil || err.Error() != unclosedBacktickErr {
+		t.Errorf("expected error `%s`, got `%s`", unclosedBacktickErr, err)
+	}
+
+	const duplicatedParamsTag = `foreignKey:CustomerId;foreignKey:UserId;`
+	duplicatedParamExpectedErr := fmt.Sprintf(duplicatedParamErr, "foreignKey")
+	if _, err := ParseSubtag(duplicatedParamsTag, true); err == nil || err.Error() != duplicatedParamExpectedErr {
+		t.Errorf("expected error `%s`, got `%s`", duplicatedParamExpectedErr, err)
 	}
 }
