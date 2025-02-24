@@ -5,7 +5,6 @@ import (
 )
 
 // TODO: introduce constants here
-// TODO: enumerate errors here
 // TODO: config feature
 
 type Tag struct {

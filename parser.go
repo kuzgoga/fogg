@@ -29,6 +29,8 @@ func parseTagItems(name string, items []string, argsDelimiter string, trimSpaces
 				value = pair[1]
 			}
 
+			value = unquoteParamValue(value)
+
 			if len(key) == 0 {
 				return tag, errors.New(fmt.Sprintf(emptyNameTagErr, value))
 			}
@@ -186,4 +188,13 @@ func ParseSubtag(value string, trimSpaces bool) (Tag, error) {
 		return Tag{}, err
 	}
 	return tag, nil
+}
+
+func unquoteParamValue(value string) string {
+	if len(value) >= 2 {
+		if (value[0] == '\'' && value[len(value)-1] == '\'') || (value[0] == '"' && value[len(value)-1] == '"') {
+			return value[1 : len(value)-1]
+		}
+	}
+	return value
 }

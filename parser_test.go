@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -243,8 +242,8 @@ func TestParseSubtag(t *testing.T) {
 		params: map[string]TagParam{
 			"default": {
 				Name:  "default",
-				Value: `'"SomeValue'`,
-				Args:  []string{`'"SomeValue'`},
+				Value: `"SomeValue`,
+				Args:  []string{`"SomeValue`},
 			},
 			"foreignKey": {
 				Name:  "foreignKey",
@@ -259,8 +258,9 @@ func TestParseSubtag(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	if !cmp.Equal(expectedTag, tag, cmpopts.IgnoreUnexported(Tag{})) {
-		t.Errorf("mismatch (-expected +got):\n%s", cmp.Diff(expectedTag, tag, cmpopts.IgnoreUnexported(Tag{})))
+
+	if !reflect.DeepEqual(expectedTag, tag) {
+		t.Errorf("got: %+v\n, expected: %+v\n", tag, expectedTag)
 	}
 }
 
@@ -274,5 +274,25 @@ func TestParseSubtagsErrors(t *testing.T) {
 	duplicatedParamExpectedErr := fmt.Sprintf(duplicatedParamErr, "foreignKey")
 	if _, err := ParseSubtag(duplicatedParamsTag, true); err == nil || err.Error() != duplicatedParamExpectedErr {
 		t.Errorf("expected error `%s`, got `%s`", duplicatedParamExpectedErr, err)
+	}
+}
+
+func TestUnquoteValue(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"'value'", "value"},
+		{`"value"`, "value"},
+		{"value", "value"},
+		{"'unmatched", "'unmatched"},
+		{`"unmatched`, `"unmatched`},
+	}
+
+	for _, test := range tests {
+		result := unquoteParamValue(test.input)
+		if result != test.expected {
+			t.Errorf("unquoteParamValue(%s) = %s; want %s", test.input, result, test.expected)
+		}
 	}
 }
