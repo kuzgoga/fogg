@@ -4,9 +4,6 @@ import (
 	"slices"
 )
 
-// TODO: introduce constants here
-// TODO: config feature
-
 type Tag struct {
 	name    string
 	value   string
