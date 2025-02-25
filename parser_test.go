@@ -296,3 +296,17 @@ func TestUnquoteValue(t *testing.T) {
 		}
 	}
 }
+
+func TestValueDistribution(t *testing.T) {
+	const tag string = `foo;omitempty`
+	const expectedValue = `foo`
+
+	parsedTag, err := ParseSubtag(tag, true)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+
+	if parsedTag.value != expectedValue {
+		t.Errorf("unexpected value: `%s` got, expected `%s`", expectedValue, tag)
+	}
+}

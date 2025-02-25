@@ -187,6 +187,11 @@ func ParseSubtag(value string, trimSpaces bool) (Tag, error) {
 	if err != nil {
 		return Tag{}, err
 	}
+
+	if len(tag.options) >= 1 {
+		tag.value = tag.options[0]
+	}
+
 	return tag, nil
 }
 

@@ -1,3 +1,3 @@
 module github.com/Georgiy10427/nested_tags
 
-go 1.23.5
+go 1.22.12

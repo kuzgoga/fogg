@@ -9,6 +9,7 @@ import (
 
 type Tag struct {
 	name    string
+	value   string
 	params  map[string]TagParam
 	options []string
 }
@@ -47,4 +48,8 @@ func (tag *Tag) GetParamOr(name string, defaultValue string) string {
 	} else {
 		return defaultValue
 	}
+}
+
+func (tag *Tag) GetValue() string {
+	return tag.value
 }
