@@ -10,6 +10,11 @@ Parser for tags of golang structures with built-in validation and support for co
 * support for `GORM` and `classic` tags styles
 * high test coverage
 
+## Installation
+```
+go get -u github.com/kuzgoga/fogg@v0.1.0
+```
+
 ## Example
 ```go
 package main
