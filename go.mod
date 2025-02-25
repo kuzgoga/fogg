@@ -1,3 +1,3 @@
-module github.com/Georgiy10427/nested_tags
+module github.com/kuzgoga/fogg
 
 go 1.22.12

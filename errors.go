@@ -1,4 +1,4 @@
-package main
+package fogg
 
 const (
 	duplicatedTagsErr   string = `duplicated tags with name "%s"`
