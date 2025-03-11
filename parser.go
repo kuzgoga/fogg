@@ -83,7 +83,7 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 
 	var (
 		items              []string
-		backticksStack     []byte
+		backticksStack     []string
 		currentItem        string
 		isBackticksContent bool
 	)
@@ -112,17 +112,23 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 			continue
 		}
 
-		if slices.Contains(backticks, string(char)) && !priorBackslash {
-			isBacktickStackNotEmpty := len(backticksStack) != 0
-			if isBacktickStackNotEmpty && backticksStack[len(backticksStack)-1] == byte(char) {
-				isBackticksContent = false
+		charStr := string(char)
+		if slices.Contains(backticks, charStr) && !priorBackslash {
+			if len(backticksStack) > 0 && backticksStack[len(backticksStack)-1] == charStr {
+				backticksStack = backticksStack[:len(backticksStack)-1] // Pop from stack
+				if len(backticksStack) == 0 {
+					isBackticksContent = false
+				}
 			} else {
+				backticksStack = append(backticksStack, charStr)
 				isBackticksContent = true
 			}
-			backticksStack = append(backticksStack, byte(char))
+			currentItem += charStr
+			continue
 		}
 
-		if slices.Contains(delimiters, string(char)) && !isBackticksContent && !priorBackslash {
+		// Only split on delimiters when not inside quotes
+		if slices.Contains(delimiters, charStr) && !isBackticksContent && !priorBackslash {
 			if currentItem != "" {
 				if trimSpaces {
 					items = append(items, strings.TrimSpace(currentItem))
@@ -132,7 +138,7 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 			}
 			currentItem = ""
 		} else {
-			currentItem += string(char)
+			currentItem += charStr
 		}
 	}
 
@@ -144,6 +150,11 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 		}
 	}
 
+	if len(backticksStack) != 0 {
+		return items, errors.New(unclosedBacktickErr)
+	}
+
+	// Handle escaped delimiters
 	for i, item := range items {
 		for _, backtick := range backticks {
 			items[i] = strings.ReplaceAll(item, "\\"+backtick, backtick)
@@ -151,10 +162,6 @@ func splitTagItems(content string, trimSpaces bool, backticks []string, delimite
 		for _, delimiter := range delimiters {
 			items[i] = strings.ReplaceAll(item, "\\"+delimiter, delimiter)
 		}
-	}
-
-	if len(backticksStack)%2 != 0 {
-		return items, errors.New(unclosedBacktickErr)
 	}
 
 	return items, nil

@@ -310,3 +310,18 @@ func TestValueDistribution(t *testing.T) {
 		t.Errorf("unexpected value: `%s` got, expected `%s`", expectedValue, tag)
 	}
 }
+
+func TestTagWithSpaces(t *testing.T) {
+	const tag = `gorm:"autoCreateTime" ui:"label:Время создания; readonly; datatype:datetime;"`
+
+	storage, err := Parse(tag)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	if !storage.HasTag("gorm") {
+		t.Errorf("expected tag `gorm` to be present")
+	}
+	if !storage.HasTag("ui") {
+		t.Errorf("expected tag `ui` to be present")
+	}
+}
