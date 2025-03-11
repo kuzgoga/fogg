@@ -12,7 +12,7 @@ Parser for tags of golang structures with built-in validation and support for co
 
 ## Installation
 ```
-go get -u github.com/kuzgoga/fogg@v0.1.0
+go get -u github.com/kuzgoga/fogg@v0.1.2
 ```
 
 ## Example
