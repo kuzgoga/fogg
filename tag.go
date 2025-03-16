@@ -50,3 +50,11 @@ func (tag *Tag) GetParamOr(name string, defaultValue string) string {
 func (tag *Tag) GetValue() string {
 	return tag.value
 }
+
+func (tag *Tag) GetOptions() []string {
+	return tag.options
+}
+
+func (tag *Tag) GetParams() map[string]TagParam {
+	return tag.params
+}
